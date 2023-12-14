@@ -14,15 +14,55 @@ router.get("/",  (req, res, next) => {
 
 //INDEX route
 router.get("/", async (req, res) => {
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, Accept, Content-Type');
     console.log("GET");
 
-    try {
-        let music = await Music.find();
+    const {start, limit} = req.query
+    parseInt(start);
+    parseInt(limit);
 
+
+    //Get items
+    const items = (await Music.find({}).select('name album artist').limit(limit*1).skip(start-1));
+    //Count total items
+    const total = await Music.countDocuments();
+
+    const createPagination = (total, start, limit) => {
+        return {
+            "currentPage": currentPage(total, start, limit),
+            "currentItems": currentItems(total, start, limit),
+            "totalPages": numberOfPages(total, start, limit),
+
+            "totalItems": total,
+            "_links": {
+                "first": {
+                    "page": 1,
+                    "href": `${process.env.BASE_URI}/music/${getFirstQueryString(total, start, limit)}`
+                },
+                "last": {
+                    "page": numberOfPages(total, start, limit),
+                    "href": `${process.env.BASE_URI}/music/${getLastQueryString(total, start, limit)}`
+                },
+                "previous": {
+                    "page": itemToPageNumber(total, start, limit, previousPageItem(total, start, limit)),
+                    "href": `${process.env.BASE_URI}/music/${getPreviousQueryString(total, start, limit)}`
+                },
+                "next": {
+                    "page": itemToPageNumber(total, start, limit, nextPageItem(total, start, limit)),
+                    "href": `${process.env.BASE_URI}/music/${getNextQueryString(total, start, limit)}`
+                }
+            }
+        }
+    }
+    const pagination = createPagination(total, start, limit);
+
+    try {
         //create representation for collection as requested in assignment
         // items, link, pagination
         let musicCollection = {
-            items: music,
+            items,
             _links: {
                 self: {
                     href: `${process.env.BASE_URI}/music`
@@ -31,10 +71,9 @@ router.get("/", async (req, res) => {
                     href: `${process.env.BASE_URI}/music`
                 },
             },
-            pagination: "TODO PAGINATION"
+            pagination
         }
-
-        res.json(musicCollection);
+        res.status(200).json(musicCollection);
     } catch {
         res.status(500).send();
     }
@@ -42,6 +81,9 @@ router.get("/", async (req, res) => {
 
 //DETAIL route
 router.get("/:id", async (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, Accept, Content-Type');
+
     console.log(`Get->Details for ${req.params.id}`);
 
         if (await Music.findById(req.params.id) !== null){
@@ -169,6 +211,7 @@ router.delete("/:id", async (req, res) => {
 router.options("/", (req, res) => {
     console.log("OPTIONS");
     res.setHeader("Allow", "GET, POST, OPTIONS");
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.send()
 });
 
@@ -176,7 +219,111 @@ router.options("/", (req, res) => {
 router.options("/:id", (req, res) => {
     console.log("OPTIONS");
     res.setHeader("Allow", "GET, PUT, DELETE, OPTIONS");
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.send()
 });
+
+function currentItems(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return total;
+    } else {
+        if((total-start+1)-limit > 0) {
+            return limit;
+        } else {
+            return total - start + 1;
+        }
+
+    }
+}
+
+function numberOfPages(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return 1;
+    } else {
+        return Math.ceil(total / limit);
+    }
+}
+
+function currentPage(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return 1;
+    } else {
+        return Math.ceil(start / limit);
+    }
+}
+
+function firstPageItem(total, start, limit){
+    return 1;
+}
+
+function lastPageItem(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return 1;
+    } else {
+        return total - (total % limit) - limit + 1;
+    }
+
+}
+
+function previousPageItem(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return 1;
+    } else {
+        return (currentPage(total, start, limit) - 1) * limit - limit + 1;
+    }
+
+}
+
+function nextPageItem(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return 1;
+    } else {
+        return (currentPage(total, start, limit) + 1) * limit - limit + 1;
+    }
+
+}
+
+function getFirstQueryString(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return "";
+    } else {
+        return `?start=${firstPageItem(total, start, limit)}&limit=${limit}`;
+    }
+}
+
+function getLastQueryString(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return "";
+    } else {
+        return `?start=${lastPageItem(total, start, limit)}&limit=${limit}`;
+    }
+}
+
+function getPreviousQueryString(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return "";
+    } else {
+        return `?start=${previousPageItem(total, start, limit)}&limit=${limit}`;
+    }
+}
+
+function getNextQueryString(total, start, limit) {
+    if(isNaN(start && limit)) {
+        return "";
+    } else {
+        return `?start=${nextPageItem(total, start, limit)}&limit=${limit}`;
+    }
+}
+
+function itemToPageNumber(total, start, limit, MusicNumber) {
+    console.log(MusicNumber)
+    if(isNaN(start && limit)) {
+        return 1;
+    } else if(MusicNumber < 0) {
+        return 1;
+    } else {
+        return Math.ceil(MusicNumber/limit);
+    }
+}
 
 export default router;
