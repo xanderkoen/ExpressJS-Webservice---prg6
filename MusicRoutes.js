@@ -4,7 +4,7 @@ import Music from "./Music.js";
 const router = express.Router();
 
 //INDEX Middleware
-router.get("/",  (req, res, next) => {
+router.get("/", (req, res, next) => {
     if (req.header("Accept") === "application/json") {
         next();
     } else {
@@ -14,65 +14,68 @@ router.get("/",  (req, res, next) => {
 
 //INDEX route
 router.get("/", async (req, res) => {
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, Accept, Content-Type');
+    // Set headers for CORS
+    res.header({
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Origin, Accept, Content-Type'
+    });
+
     console.log("GET");
 
-    const {start, limit} = req.query
+    const { start, limit } = req.query;
     parseInt(start);
     parseInt(limit);
 
+    // Get items
+    const items = await Music.find({})
+        .select('name album artist')
+        .limit(limit * 1)
+        .skip(start - 1);
 
-    //Get items
-    const items = (await Music.find({}).select('name album artist').limit(limit*1).skip(start-1));
-    //Count total items
+    // Count total items
     const total = await Music.countDocuments();
 
     const createPagination = (total, start, limit) => {
         return {
-            "currentPage": currentPage(total, start, limit),
-            "currentItems": currentItems(total, start, limit),
-            "totalPages": numberOfPages(total, start, limit),
-
-            "totalItems": total,
-            "_links": {
-                "first": {
-                    "page": 1,
-                    "href": `${process.env.BASE_URI}/music/${getFirstQueryString(total, start, limit)}`
+            currentPage: currentPage(total, start, limit),
+            currentItems: currentItems(total, start, limit),
+            totalPages: numberOfPages(total, start, limit),
+            totalItems: total,
+            _links: {
+                first: {
+                    page: 1,
+                    href: `${process.env.BASE_URI}/music/${getFirstQueryString(total, start, limit)}`
                 },
-                "last": {
-                    "page": numberOfPages(total, start, limit),
-                    "href": `${process.env.BASE_URI}/music/${getLastQueryString(total, start, limit)}`
+                last: {
+                    page: numberOfPages(total, start, limit),
+                    href: `${process.env.BASE_URI}/music/${getLastQueryString(total, start, limit)}`
                 },
-                "previous": {
-                    "page": itemToPageNumber(total, start, limit, previousPageItem(total, start, limit)),
-                    "href": `${process.env.BASE_URI}/music/${getPreviousQueryString(total, start, limit)}`
+                previous: {
+                    page: itemToPageNumber(total, start, limit, previousPageItem(total, start, limit)),
+                    href: `${process.env.BASE_URI}/music/${getPreviousQueryString(total, start, limit)}`
                 },
-                "next": {
-                    "page": itemToPageNumber(total, start, limit, nextPageItem(total, start, limit)),
-                    "href": `${process.env.BASE_URI}/music/${getNextQueryString(total, start, limit)}`
+                next: {
+                    page: itemToPageNumber(total, start, limit, nextPageItem(total, start, limit)),
+                    href: `${process.env.BASE_URI}/music/${getNextQueryString(total, start, limit)}`
                 }
             }
-        }
-    }
+        };
+    };
+
     const pagination = createPagination(total, start, limit);
 
     try {
-        //create representation for collection as requested in assignment
+        // Create representation for collection as requested in assignment
         // items, link, pagination
-        let musicCollection = {
+        const musicCollection = {
             items,
             _links: {
-                self: {
-                    href: `${process.env.BASE_URI}/music`
-                },
-                collection: {
-                    href: `${process.env.BASE_URI}/music`
-                },
+                self: { href: `${process.env.BASE_URI}/music` },
+                collection: { href: `${process.env.BASE_URI}/music` },
             },
             pagination
-        }
+        };
         res.status(200).json(musicCollection);
     } catch {
         res.status(500).send();
@@ -81,30 +84,33 @@ router.get("/", async (req, res) => {
 
 //DETAIL route
 router.get("/:id", async (req, res) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, Accept, Content-Type');
+    // Set CORS headers
+    res.header({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Origin, Accept, Content-Type'
+    });
 
     console.log(`Get->Details for ${req.params.id}`);
 
-        if (await Music.findById(req.params.id) !== null){
-            try {
-                let music = await Music.findById(req.params.id);
-                res.status(200).json(music)
-            }catch {
-                res.status(500).send();
-            }
-        }else{
-            res.status(404).send()
+    if (await Music.findById(req.params.id) !== null) {
+        try {
+            const music = await Music.findById(req.params.id);
+            res.status(200).json(music);
+        } catch {
+            res.status(500).send();
         }
+    } else {
+        res.status(404).send();
+    }
 });
+
 
 //POST route
 //POST Middleware
-router.post("/",  (req, res, next) => {
+router.post("/", (req, res, next) => {
     if (req.header("Content-Type") === "application/json" || req.header("Content-Type") === "application/x-www-form-urlencoded") {
         next();
-    }
-    else {
+    } else {
         res.status(415).send();
     }
 });
@@ -113,14 +119,12 @@ router.post("/",  (req, res, next) => {
 router.post("/", async (req, res) => {
     console.log("POST");
 
-    let { name, album, artist } = req.body;
+    let {name, album, artist} = req.body;
 
     //check for empty values
-    if(!name || !album || !artist) {
+    if (!name || !album || !artist) {
         return res.status(400).json("all fields must be entered");
-    }
-
-    else {
+    } else {
         //upload to DB
         try {
             const insertMusic = await Music.create({
@@ -137,14 +141,12 @@ router.post("/", async (req, res) => {
 });
 
 
-
 //PUT route
 //PUT Middleware
-router.put("/:id",  (req, res, next) => {
+router.put("/:id", (req, res, next) => {
     if (req.header("Content-Type") === "application/json" || req.header("Content-Type") === "application/x-www-form-urlencoded") {
         next();
-    }
-    else {
+    } else {
         res.status(415).send();
     }
 });
@@ -156,11 +158,10 @@ router.put("/:id", async (req, res) => {
     const {name, album, artist} = req.body;
 
     //check if Music exists
-    if (await Music.findById(req.params.id) !== null)
-    {
-       //Music exists continuing checks
+    if (await Music.findById(req.params.id) !== null) {
+        //Music exists continuing checks
         //check for empty values
-        if(name || album || artist) {
+        if (name || album || artist) {
             try {
                 await Music.findByIdAndUpdate(req.params.id, req.body);
                 const newMusic = await Music.findById(req.params.id,
@@ -170,17 +171,13 @@ router.put("/:id", async (req, res) => {
                         artist
                     });
                 res.status(202).json(newMusic)
-            }
-            catch{
+            } catch {
                 res.status(500).send("internal server error");
             }
-        }
-        else {
+        } else {
             return res.status(400).json("all fields must be entered");
         }
-    }
-    else
-    {
+    } else {
         //Music not found
         res.status(404).send("Music does not exist")
     }
@@ -193,14 +190,12 @@ router.delete("/:id", async (req, res) => {
     //check if Music exists
     if (await Music.findById(req.params.id) !== null) {
         try {
-            await  Music.findByIdAndDelete(req.params.id);
+            await Music.findByIdAndDelete(req.params.id);
             return res.status(204).json(`Music:${req.params.id} has been deleted`)
-        }
-        catch{
+        } catch {
             res.status(500).send("internal server error");
         }
-    }else
-    {
+    } else {
         //Music not found
         res.status(404).send("Music does not exist")
     }
@@ -224,10 +219,10 @@ router.options("/:id", (req, res) => {
 });
 
 function currentItems(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return total;
     } else {
-        if((total-start+1)-limit > 0) {
+        if ((total - start + 1) - limit > 0) {
             return limit;
         } else {
             return total - start + 1;
@@ -237,7 +232,7 @@ function currentItems(total, start, limit) {
 }
 
 function numberOfPages(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return 1;
     } else {
         return Math.ceil(total / limit);
@@ -245,19 +240,19 @@ function numberOfPages(total, start, limit) {
 }
 
 function currentPage(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return 1;
     } else {
         return Math.ceil(start / limit);
     }
 }
 
-function firstPageItem(total, start, limit){
+function firstPageItem(total, start, limit) {
     return 1;
 }
 
 function lastPageItem(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return 1;
     } else {
         return total - (total % limit) - limit + 1;
@@ -266,7 +261,7 @@ function lastPageItem(total, start, limit) {
 }
 
 function previousPageItem(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return 1;
     } else {
         return (currentPage(total, start, limit) - 1) * limit - limit + 1;
@@ -275,7 +270,7 @@ function previousPageItem(total, start, limit) {
 }
 
 function nextPageItem(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return 1;
     } else {
         return (currentPage(total, start, limit) + 1) * limit - limit + 1;
@@ -284,7 +279,7 @@ function nextPageItem(total, start, limit) {
 }
 
 function getFirstQueryString(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return "";
     } else {
         return `?start=${firstPageItem(total, start, limit)}&limit=${limit}`;
@@ -292,7 +287,7 @@ function getFirstQueryString(total, start, limit) {
 }
 
 function getLastQueryString(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return "";
     } else {
         return `?start=${lastPageItem(total, start, limit)}&limit=${limit}`;
@@ -300,7 +295,7 @@ function getLastQueryString(total, start, limit) {
 }
 
 function getPreviousQueryString(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return "";
     } else {
         return `?start=${previousPageItem(total, start, limit)}&limit=${limit}`;
@@ -308,7 +303,7 @@ function getPreviousQueryString(total, start, limit) {
 }
 
 function getNextQueryString(total, start, limit) {
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return "";
     } else {
         return `?start=${nextPageItem(total, start, limit)}&limit=${limit}`;
@@ -317,12 +312,12 @@ function getNextQueryString(total, start, limit) {
 
 function itemToPageNumber(total, start, limit, MusicNumber) {
     console.log(MusicNumber)
-    if(isNaN(start && limit)) {
+    if (isNaN(start && limit)) {
         return 1;
-    } else if(MusicNumber < 0) {
+    } else if (MusicNumber < 0) {
         return 1;
     } else {
-        return Math.ceil(MusicNumber/limit);
+        return Math.ceil(MusicNumber / limit);
     }
 }
 
